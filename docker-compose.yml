@@ -6,8 +6,8 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      DEFAULT_MODEL: ${DEFAULT_MODEL:-grok-4-fast}
-      IMAGE_MODEL: ${IMAGE_MODEL:-grok-imagine-1.0}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-grok-4.1-fast}
+      IMAGE_MODEL: ${IMAGE_MODEL:-grok-imagine-1.0-edit}
       ALLOWED_CHAT_IDS: ${ALLOWED_CHAT_IDS:-}
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:-120}
       # Aliyun Model Studio (DashScope) TTS

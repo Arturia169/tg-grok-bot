@@ -99,8 +99,8 @@ def load_settings() -> Settings:
     base = _env_required("OPENAI_BASE_URL").rstrip("/")
     key = _env_required("OPENAI_API_KEY")
 
-    default_model = os.environ.get("DEFAULT_MODEL", "grok-4-fast")
-    image_model = os.environ.get("IMAGE_MODEL", "grok-imagine-1.0")
+    default_model = os.environ.get("DEFAULT_MODEL", "grok-4.1-fast")
+    image_model = os.environ.get("IMAGE_MODEL", "grok-imagine-1.0-edit")
 
     allowed_raw = os.environ.get("ALLOWED_CHAT_IDS", "").strip()
     allowed: set[int] = set()
