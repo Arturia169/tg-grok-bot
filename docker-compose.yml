@@ -33,7 +33,6 @@ services:
       OCR_MODEL: ${OCR_MODEL:-grok-4.1-expert}
       # Scene image prompt pre-summarization
       SCENE_SUMMARIZE: ${SCENE_SUMMARIZE:-1}
-      SCENE_SUMMARIZE_MODEL: ${SCENE_SUMMARIZE_MODEL:-grok-4-fast}
     volumes:
       - ./data:/data
       - ./personas:/data/personas:ro
