@@ -1,0 +1,40 @@
+services:
+  tg-grok-bot:
+    container_name: tg-grok-bot
+    build: .
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-grok-4-fast}
+      IMAGE_MODEL: ${IMAGE_MODEL:-grok-imagine-1.0}
+      ALLOWED_CHAT_IDS: ${ALLOWED_CHAT_IDS:-}
+      HTTP_TIMEOUT: ${HTTP_TIMEOUT:-120}
+      # Aliyun Model Studio (DashScope) TTS
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      TTS_ENABLED: ${TTS_ENABLED:-0}
+      TTS_DEFAULT_MODEL: ${TTS_DEFAULT_MODEL:-cosyvoice-v3-flash}
+      TTS_DEFAULT_VOICE: ${TTS_DEFAULT_VOICE:-longyang}
+      TTS_FALLBACK_MODEL: ${TTS_FALLBACK_MODEL:-cosyvoice-v3-flash}
+      TTS_FALLBACK_VOICE: ${TTS_FALLBACK_VOICE:-longyang}
+      TTS_DAILY_LIMIT: ${TTS_DAILY_LIMIT:-10}
+      TTS_MAX_CHARS: ${TTS_MAX_CHARS:-200}
+      TTS_VOLUME: ${TTS_VOLUME:-100}
+      TTS_DEFAULT_ON: ${TTS_DEFAULT_ON:-1}
+      # Memory persistence (SQLite)
+      MEMORY_DB_PATH: ${MEMORY_DB_PATH:-/data/memory.sqlite}
+      MEMORY_MAX_LOG_MESSAGES: ${MEMORY_MAX_LOG_MESSAGES:-120}
+      MEMORY_SUMMARY_MAX_CHARS: ${MEMORY_SUMMARY_MAX_CHARS:-2000}
+      MEMORY_SUMMARY_UPDATE_EVERY: ${MEMORY_SUMMARY_UPDATE_EVERY:-12}
+      PERSONAS_DIR: ${PERSONAS_DIR:-/data/personas}
+      # OCR
+      OCR_ENABLED: ${OCR_ENABLED:-1}
+      OCR_DEFAULT_ON: ${OCR_DEFAULT_ON:-0}
+      OCR_MODEL: ${OCR_MODEL:-grok-4.1-expert}
+      # Scene image prompt pre-summarization
+      SCENE_SUMMARIZE: ${SCENE_SUMMARIZE:-1}
+      SCENE_SUMMARIZE_MODEL: ${SCENE_SUMMARIZE_MODEL:-grok-4-fast}
+    volumes:
+      - ./data:/data
+      - ./personas:/data/personas:ro
+    restart: unless-stopped
