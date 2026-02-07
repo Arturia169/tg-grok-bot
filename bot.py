@@ -1580,8 +1580,22 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update.effective_chat.id, s.allowed_chat_ids):
         return
 
-    raw = update.message.text.strip()
+    raw0 = update.message.text
+    raw = raw0.strip()
     if not raw:
+        return
+
+    # Telegram only treats messages starting with '/' (no leading whitespace) as commands.
+    # Users sometimes reply with leading spaces or a fullwidth slash, causing /scene to fall into this handler.
+    stripped = raw0.lstrip()
+    if stripped.startswith("/scene") or stripped.startswith("/scene@") or stripped.startswith("／scene") or stripped.startswith("／scene@"):
+        old_args = getattr(context, "args", None)
+        try:
+            parts = stripped.replace("／", "/", 1).split()
+            context.args = parts[1:]
+            await cmd_scene(update, context)
+        finally:
+            context.args = old_args
         return
 
     # Force mode prefixes
