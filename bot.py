@@ -146,7 +146,8 @@ def load_settings() -> Settings:
     personas_dir = os.environ.get("PERSONAS_DIR", "/data/personas").strip() or "/data/personas"
 
     scene_summarize = os.environ.get("SCENE_SUMMARIZE", "1").strip() in ("1", "true", "True")
-    scene_summarize_model = os.environ.get("SCENE_SUMMARIZE_MODEL", "grok-4-fast").strip() or "grok-4-fast"
+    # Default to the same model used for chat; some proxies reject unknown model ids.
+    scene_summarize_model = os.environ.get("SCENE_SUMMARIZE_MODEL", default_model).strip() or default_model
 
     ocr_enabled = os.environ.get("OCR_ENABLED", "1").strip() in ("1", "true", "True")
     ocr_default_on = os.environ.get("OCR_DEFAULT_ON", "0").strip() in ("1", "true", "True")
@@ -1485,8 +1486,10 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bool(update.message.reply_to_message),
         context.args,
     )
+    logger.info("/scene raw text head: %s", (scene_text or "")[:200])
 
     scene_text = _sanitize_scene_text(scene_text)
+    logger.info("/scene sanitized head: %s", scene_text[:200])
 
     # Step 1: summarize/extract key scene info to improve accuracy
     if s.scene_summarize:
@@ -1505,7 +1508,16 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
             scene_text = _sanitize_scene_text(scene_text)
             logger.info("/scene summarized: %s", scene_text[:200])
         except Exception as e:
-            logger.warning("/scene summarize failed: %r", e)
+            logger.warning("/scene summarize failed (model=%s): %r", s.scene_summarize_model, e)
+            # Fallback: try the chat default model once.
+            if s.scene_summarize_model != s.default_model:
+                try:
+                    scene_text2 = (await client.chat(model=s.default_model, user_text=sum_prompt)).strip() or scene_text
+                    scene_text2 = _sanitize_scene_text(scene_text2)
+                    scene_text = scene_text2
+                    logger.info("/scene summarized (fallback): %s", scene_text[:200])
+                except Exception as e2:
+                    logger.warning("/scene summarize fallback failed (model=%s): %r", s.default_model, e2)
 
     # Step 2: build final image prompt
     prompt = build_scene_prompt(scene_text)
