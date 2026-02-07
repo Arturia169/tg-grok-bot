@@ -42,6 +42,7 @@ class Settings:
     openai_api_key: str
     default_model: str
     image_model: str
+    image_edit_model: str
     allowed_chat_ids: set[int]
     http_timeout: float
 
@@ -100,7 +101,10 @@ def load_settings() -> Settings:
     key = _env_required("OPENAI_API_KEY")
 
     default_model = os.environ.get("DEFAULT_MODEL", "grok-4.1-fast")
-    image_model = os.environ.get("IMAGE_MODEL", "grok-imagine-1.0-edit")
+    # Some providers require `grok-imagine-1.0` for /images/generations.
+    image_model = os.environ.get("IMAGE_MODEL", "grok-imagine-1.0")
+    # Keep a separate model id for /images/edits (if supported by the upstream).
+    image_edit_model = os.environ.get("IMAGE_EDIT_MODEL", "grok-imagine-1.0-edit")
 
     allowed_raw = os.environ.get("ALLOWED_CHAT_IDS", "").strip()
     allowed: set[int] = set()
@@ -159,6 +163,7 @@ def load_settings() -> Settings:
         openai_api_key=key,
         default_model=default_model,
         image_model=image_model,
+        image_edit_model=image_edit_model,
         allowed_chat_ids=allowed,
         http_timeout=timeout,
         dashscope_api_key=dashscope_key,
