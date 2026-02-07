@@ -38,8 +38,15 @@ logger = logging.getLogger("tg-grok-bot")
 @dataclass
 class Settings:
     telegram_token: str
+
+    # Chat (text) provider
     openai_base_url: str
     openai_api_key: str
+
+    # Image provider (optional; if empty, reuse chat provider)
+    openai_image_base_url: str
+    openai_image_api_key: str
+
     default_model: str
     image_model: str
     image_edit_model: str
@@ -99,6 +106,13 @@ def load_settings() -> Settings:
     token = _env_required("TELEGRAM_BOT_TOKEN")
     base = _env_required("OPENAI_BASE_URL").rstrip("/")
     key = _env_required("OPENAI_API_KEY")
+
+    image_base = os.environ.get("OPENAI_IMAGE_BASE_URL", "").strip().rstrip("/")
+    image_key = os.environ.get("OPENAI_IMAGE_API_KEY", "").strip()
+    if not image_base:
+        image_base = base
+    if not image_key:
+        image_key = key
 
     default_model = os.environ.get("DEFAULT_MODEL", "grok-4.1-fast")
     # Some providers require `grok-imagine-1.0` for /images/generations.
@@ -161,6 +175,8 @@ def load_settings() -> Settings:
         telegram_token=token,
         openai_base_url=base,
         openai_api_key=key,
+        openai_image_base_url=image_base,
+        openai_image_api_key=image_key,
         default_model=default_model,
         image_model=image_model,
         image_edit_model=image_edit_model,
@@ -1310,7 +1326,7 @@ async def cmd_ask(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_img(update: Update, context: ContextTypes.DEFAULT_TYPE):
     s: Settings = context.application.bot_data["settings"]
-    client: OpenAICompat = context.application.bot_data["client"]
+    client: OpenAICompat = context.application.bot_data["image_client"]
 
     if update.effective_chat is None or update.message is None:
         return
@@ -1409,7 +1425,8 @@ def build_scene_prompt(scene: str) -> str:
 
 async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
     s: Settings = context.application.bot_data["settings"]
-    client: OpenAICompat = context.application.bot_data["client"]
+    chat_client: OpenAICompat = context.application.bot_data["client"]
+    img_client: OpenAICompat = context.application.bot_data["image_client"]
 
     if update.effective_chat is None or update.message is None:
         return
@@ -1468,7 +1485,7 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "- 输出必须是纯文本，不要编号。\n\n"
                 f"原文：{scene_text}"
             )
-            scene_text = (await client.chat(model=s.scene_summarize_model, user_text=sum_prompt)).strip() or scene_text
+            scene_text = (await chat_client.chat(model=s.scene_summarize_model, user_text=sum_prompt)).strip() or scene_text
             scene_text = _sanitize_scene_text(scene_text)
             logger.info("/scene summarized: %s", scene_text[:200])
         except Exception as e:
@@ -1476,7 +1493,7 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Fallback: try the chat default model once.
             if s.scene_summarize_model != s.default_model:
                 try:
-                    scene_text2 = (await client.chat(model=s.default_model, user_text=sum_prompt)).strip() or scene_text
+                    scene_text2 = (await chat_client.chat(model=s.default_model, user_text=sum_prompt)).strip() or scene_text
                     scene_text2 = _sanitize_scene_text(scene_text2)
                     scene_text = scene_text2
                     logger.info("/scene summarized (fallback): %s", scene_text[:200])
@@ -1489,7 +1506,7 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.effective_chat.send_action(ChatAction.UPLOAD_PHOTO)
     try:
-        data = await client.images_generate(model=s.image_model, prompt=prompt, n=1, response_format="url")
+        data = await img_client.images_generate(model=s.image_model, prompt=prompt, n=1, response_format="url")
     except httpx.HTTPStatusError as e:
         await update.message.reply_text(f"上游接口错误：{e.response.status_code} {e.response.text}")
         return
@@ -1730,6 +1747,11 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def post_init(app: Application):
     s: Settings = app.bot_data["settings"]
     app.bot_data["client"] = OpenAICompat(base_url=s.openai_base_url, api_key=s.openai_api_key, timeout=s.http_timeout)
+    app.bot_data["image_client"] = OpenAICompat(
+        base_url=s.openai_image_base_url,
+        api_key=s.openai_image_api_key,
+        timeout=s.http_timeout,
+    )
     app.bot_data["store"] = MemoryStore(s.memory_db_path)
     app.bot_data["personas"] = load_personas_dir(s.personas_dir)
     if s.tts_enabled:
@@ -1758,6 +1780,10 @@ async def post_shutdown(app: Application):
     client: OpenAICompat = app.bot_data.get("client")
     if client:
         await client.close()
+
+    img_client: OpenAICompat = app.bot_data.get("image_client")
+    if img_client and img_client is not client:
+        await img_client.close()
 
 
 def main():
