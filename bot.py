@@ -1426,7 +1426,8 @@ def build_scene_prompt(scene: str) -> str:
         "【强负面词（尽量避免）】\n"
         "third person, extra person, extra people, bystander, crowd, stranger, waiter, background person, silhouette, reflection, poster people,\n"
         "other man, male face, male body, second male, man standing,\n"
-        "extra hands, extra arms, multiple hands\n"
+        "extra hands, extra arms, multiple hands,\n"
+        "text, caption, subtitle, watermark, logo, speech bubble, chat bubble, screenshot, UI\n"
         "\n"
         "女友形象：黑色长发、红色眼睛、成熟温柔的御姐气质，红黑配色，优雅又带点害羞；整体气质参考《间谍过家家》荆棘公主风格元素（仅作灵感参考，不要直接复刻原角色或原服装细节）。\n"
         "场景描述："
@@ -1491,13 +1492,14 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if s.scene_summarize:
         try:
             sum_prompt = (
-                "你是一个场景提炼器。把用户输入的场景描述提炼成用于绘图的精炼中文文本（1-3句）。\n"
+                "你是一个场景提炼器。把用户输入的文字提炼成用于‘画面生成’的精炼中文场景描述（1-3句）。\n"
                 "要求：\n"
                 "- 只保留人物关系、动作、地点、时间、氛围、关键物件。\n"
-                "- 不要添加新情节，不要脑补第三人。\n"
-                "- 不要输出任何链接、markdown。\n"
+                "- 把抽象/对话/叙述改写成‘能被画出来’的镜头语言。\n"
+                "- 绝对不要把‘原文’当成要画出来的文字：不要出现‘画出这段话/把文字写在图上/截图/字幕/海报文字/聊天气泡文字’等。\n"
+                "- 输出里不要出现引号、代码块、markdown、链接。\n"
                 "- 输出必须是纯文本，不要编号。\n\n"
-                f"场景原文：{scene_text}"
+                f"原文：{scene_text}"
             )
             scene_text = (await client.chat(model=s.scene_summarize_model, user_text=sum_prompt)).strip() or scene_text
             scene_text = _sanitize_scene_text(scene_text)
