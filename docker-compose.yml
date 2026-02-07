@@ -8,7 +8,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       DEFAULT_MODEL: ${DEFAULT_MODEL:-grok-4.1-fast}
       IMAGE_MODEL: ${IMAGE_MODEL:-grok-imagine-1.0}
-      IMAGE_EDIT_MODEL: ${IMAGE_EDIT_MODEL:-grok-imagine-1.0-edit}
+      # IMAGE_EDIT_MODEL is deprecated
       ALLOWED_CHAT_IDS: ${ALLOWED_CHAT_IDS:-}
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:-120}
       # Aliyun Model Studio (DashScope) TTS
@@ -31,7 +31,7 @@ services:
       # OCR
       OCR_ENABLED: ${OCR_ENABLED:-1}
       OCR_DEFAULT_ON: ${OCR_DEFAULT_ON:-0}
-      OCR_MODEL: ${OCR_MODEL:-grok-4.1-expert}
+      OCR_MODEL: ${OCR_MODEL:-grok-4.1-fast}
       # Scene image prompt pre-summarization
       SCENE_SUMMARIZE: ${SCENE_SUMMARIZE:-1}
     volumes:

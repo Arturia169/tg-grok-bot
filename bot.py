@@ -155,7 +155,7 @@ def load_settings() -> Settings:
 
     ocr_enabled = os.environ.get("OCR_ENABLED", "1").strip() in ("1", "true", "True")
     ocr_default_on = os.environ.get("OCR_DEFAULT_ON", "0").strip() in ("1", "true", "True")
-    ocr_model = os.environ.get("OCR_MODEL", "grok-4.1-expert").strip() or "grok-4.1-expert"
+    ocr_model = os.environ.get("OCR_MODEL", "grok-4.1-fast").strip() or "grok-4.1-fast"
 
     return Settings(
         telegram_token=token,
@@ -774,13 +774,10 @@ async def cmd_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Static list (matches your grok2api deployment)
     await update.message.reply_text(
         "可用模型：\n"
-        "- grok-4\n"
-        "- grok-4-fast\n"
-        "- grok-4.1\n"
-        "- grok-4.1-thinking\n"
-        "- grok-imagine-1.0\n"
+        "- grok-4.1-fast（默认，文本对话）\n"
+        "- grok-imagine-1.0（图像生成）\n"
         "\n"
-        "提示：使用 /model grok-4-fast 设置默认模型\n"
+        "提示：使用 /model grok-4.1-fast 设置默认模型\n"
         "语音：使用 /voice on 开启语音回复（每日限额）"
     )
 
@@ -806,40 +803,6 @@ async def cmd_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     store.set_model(update.effective_chat.id, mid)
     await update.message.reply_text(f"好的，已设置本聊天默认模型为：{mid}")
 
-
-async def cmd_expert(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Quick toggle for grok-4.1-expert in the current chat."""
-
-    s: Settings = context.application.bot_data["settings"]
-    if update.effective_chat is None or update.message is None:
-        return
-    if not is_allowed(update.effective_chat.id, s.allowed_chat_ids):
-        return
-
-    store: MemoryStore = context.application.bot_data["store"]
-    store.ensure_chat(update.effective_chat.id, s)
-
-    args = context.args or []
-    if not args:
-        st = store.get_state(update.effective_chat.id)
-        cur = (st.get("model") if st else "") or s.default_model
-        await update.message.reply_text(
-            "用法：/expert on 或 /expert off\n"
-            f"当前默认模型：{cur}"
-        )
-        return
-
-    opt = args[0].strip().lower()
-    if opt in ("on", "1", "true", "enable"):
-        store.set_model(update.effective_chat.id, "grok-4.1-expert")
-        await update.message.reply_text("好的，已切到：grok-4.1-expert")
-        return
-    if opt in ("off", "0", "false", "disable"):
-        store.set_model(update.effective_chat.id, s.default_model)
-        await update.message.reply_text(f"好的，已切回默认模型：{s.default_model}")
-        return
-
-    await update.message.reply_text("用法：/expert on 或 /expert off")
 
 
 async def cmd_persona(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1186,7 +1149,7 @@ async def update_memory_if_needed(store: MemoryStore, client: OpenAICompat, chat
     )
 
     try:
-        new_summary = await client.chat(model="grok-4-fast", user_text=prompt, system_prompt="You are a memory summarizer.")
+        new_summary = await client.chat(model="grok-4.1-fast", user_text=prompt, system_prompt="You are a memory summarizer.")
     except Exception:
         return
 
@@ -1394,7 +1357,6 @@ async def cmd_img(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_photo(photo=img)
-    await update.message.reply_text("\n".join(urls[:4]), disable_web_page_preview=True)
 
 
 def _sanitize_scene_text(text: str) -> str:
@@ -1407,45 +1369,42 @@ def _sanitize_scene_text(text: str) -> str:
 
 
 def build_scene_prompt(scene: str) -> str:
-    # Anime-style romantic scene. No explicit sexual content.
-    # Character is an inspiration reference, not a direct copy.
     scene = _sanitize_scene_text(scene)
-
-    # Make constraints explicit and repeat them in both CN + EN.
-    # Image models can "hallucinate" background people or an extra male body.
     base = (
-        "二次元动漫插画风，柔和光影，高质量细节，电影感构图，高分辨率。\n"
-        "\n"
-        "【硬性输出规范（必须严格遵守）】\n"
-        "1) 人物数量：画面里只允许出现 2 个人：‘我(男)’ + ‘女友(女)’。禁止任何第三人（包括路人、服务员、剪影、倒影、海报/屏幕里的人像）。\n"
-        "2) POV：男性第一人称视角。男方只能以‘前景两只手/前臂’出镜；禁止出现男方的脸/头部/上半身/完整背影；禁止出现第二个男性。\n"
-        "3) 互动：女友只能与‘我’互动，不与任何陌生人互动。\n"
-        "4) 手部：只允许出现两只男手（我的）+ 女友的手；禁止多余手/多余手臂。\n"
-        "5) 关系：一对异性情侣（1男1女）。禁止女女/百合。\n"
-        "6) 内容：浪漫暧昧但不露骨；禁止裸露、禁止性行为、禁止露点。\n"
-        "\n"
-        "【English constraints】\n"
-        "- Exactly 2 people only: me (male POV) and my girlfriend (female). No third person, no bystanders.\n"
-        "- Male POV ONLY: show only two male hands/forearms in foreground. No male face/body/back. No other man.\n"
-        "- No extra hands/arms. No crowd. No strangers.\n"
-        "\n"
-        "【强负面词（尽量避免）】\n"
-        "third person, extra person, extra people, bystander, crowd, stranger, waiter, background person, silhouette, reflection, poster people,\n"
-        "other man, male face, male body, second male, man standing,\n"
-        "extra hands, extra arms, multiple hands,\n"
-        "text, caption, subtitle, watermark, logo, speech bubble, chat bubble, screenshot, UI\n"
-        "\n"
-        "女友形象：黑色长发、红色眼睛、成熟温柔的御姐气质，红黑配色，优雅又带点害羞；整体气质参考《间谍过家家》荆棘公主风格元素（仅作灵感参考，不要直接复刻原角色或原服装细节）。\n"
-        "场景描述："
+        # 画质与风格
+        "masterpiece, best quality, ultra-detailed, 8K wallpaper, "
+        "realistic anime style, semi-realistic, cinematic lighting, "
+        "dramatic shadows, depth of field, film grain, vivid colors.\n"
+        # 视角限制
+        "POV shot, first-person perspective, subjective view. "
+        "Only show MY hands/forearms in foreground when interacting. "
+        "NEVER show my face, body, or reflection.\n"
+        # 人物限制
+        "STRICTLY 2 PEOPLE ONLY: me (viewer/camera) and my girlfriend. "
+        "NO third person, NO bystanders, NO crowd, NO reflections of other people, "
+        "NO people in posters/screens/photos within the scene.\n"
+        # 女主形象
+        "Girlfriend appearance: Yor Forger (Thorn Princess) from Spy x Family, "
+        "long black hair, striking red eyes, "
+        "mature elegant onee-san aura, red-black color scheme outfit, "
+        "graceful yet slightly shy expression, beautiful detailed face, "
+        "slender figure.\n"
+        # 互动与氛围
+        "Romantic couple interaction, intimate and sensual, NSFW allowed, "
+        "she looks at the camera (me) with affection and desire.\n"
+        # 负面提示
+        "Negative: lowres, bad anatomy, bad hands, missing fingers, "
+        "extra digits, fewer digits, cropped, worst quality, low quality, "
+        "normal quality, jpeg artifacts, signature, watermark, username, "
+        "blurry, text, caption, subtitle, logo, typography, letters, "
+        "speech bubble, chat bubble, screenshot, UI, "
+        "third person, extra people, crowd, bystander, "
+        "male face, male body visible, multiple males.\n"
+        # 场景描述
+        "Scene description: "
     )
 
-    # Repeat the key constraint right before the scene (helps many models).
-    tail = (
-        "\n\n"
-        "再次强调：画面中只能有 2 个人；男方只能是 POV 的两只手/前臂；不允许出现任何其他男性或第三人。\n"
-    )
-
-    return base + scene + tail
+    return base + scene
 
 
 async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1563,7 +1522,6 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_photo(photo=img)
-    await update.message.reply_text("\n".join(urls[:4]), disable_web_page_preview=True)
 
 
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1733,7 +1691,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "- 不要表情包式长串emoji，最多1个。\n\n"
                     f"原文：{out}"
                 )
-                short_out = (await client.chat(model="grok-4-fast", user_text=compress_prompt)).strip() or out
+                short_out = (await client.chat(model="grok-4.1-fast", user_text=compress_prompt)).strip() or out
             except Exception:
                 short_out = out
 
@@ -1754,7 +1712,7 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         use_voice = False
         if s.tts_enabled and tts_enabled_for_chat(store, chat_id, s) and store.tts_can_use(chat_id, s) and len(out) <= s.tts_max_chars:
             try:
-                use_voice = await client.decide_tts(model="grok-4-fast", user_text=text, assistant_text=out)
+                use_voice = await client.decide_tts(model="grok-4.1-fast", user_text=text, assistant_text=out)
             except Exception:
                 use_voice = False
 
@@ -1818,7 +1776,7 @@ def main():
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("models", cmd_models))
     app.add_handler(CommandHandler("model", cmd_model))
-    app.add_handler(CommandHandler("expert", cmd_expert))
+
     app.add_handler(CommandHandler("persona", cmd_persona))
     app.add_handler(CommandHandler("gf", cmd_gf))
     app.add_handler(CommandHandler("daily", cmd_daily))
