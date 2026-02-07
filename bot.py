@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -29,6 +30,9 @@ except Exception:  # optional dependency
     SpeechSynthesizer = None
 
 load_dotenv()
+
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("tg-grok-bot")
 
 
 @dataclass
@@ -1448,12 +1452,38 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Prefer replying to the message you want to illustrate.
     scene_text = " ".join(context.args or []).strip()
-    if not scene_text and update.message.reply_to_message and update.message.reply_to_message.text:
-        scene_text = update.message.reply_to_message.text.strip()
+    if not scene_text and update.message.reply_to_message:
+        rt = update.message.reply_to_message
+        if rt.text:
+            scene_text = rt.text.strip()
+        elif rt.caption:
+            scene_text = rt.caption.strip()
 
     if not scene_text:
-        await update.message.reply_text("用法：/scene <场景描述>（或回复一条消息再发送 /scene）")
+        rt = update.message.reply_to_message
+        rt_kind = "none"
+        if rt is not None:
+            if rt.text:
+                rt_kind = "text"
+            elif rt.caption:
+                rt_kind = "caption"
+            elif rt.photo:
+                rt_kind = "photo"
+            else:
+                rt_kind = "other"
+        await update.message.reply_text(
+            "用法：/scene <场景描述>（或回复一条消息再发送 /scene）。"
+            f"\n\n(调试信息：reply_kind={rt_kind}, args_len={len(context.args or [])})"
+        )
         return
+
+    logger.info(
+        "/scene invoked: chat=%s msg=%s reply=%s args=%s",
+        update.effective_chat.id,
+        update.message.message_id,
+        bool(update.message.reply_to_message),
+        context.args,
+    )
 
     scene_text = _sanitize_scene_text(scene_text)
 
@@ -1471,11 +1501,13 @@ async def cmd_scene(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             scene_text = (await client.chat(model=s.scene_summarize_model, user_text=sum_prompt)).strip() or scene_text
             scene_text = _sanitize_scene_text(scene_text)
-        except Exception:
-            pass
+            logger.info("/scene summarized: %s", scene_text[:200])
+        except Exception as e:
+            logger.warning("/scene summarize failed: %r", e)
 
     # Step 2: build final image prompt
     prompt = build_scene_prompt(scene_text)
+    logger.info("/scene prompt head: %s", prompt[:200])
 
     await update.effective_chat.send_action(ChatAction.UPLOAD_PHOTO)
     try:
